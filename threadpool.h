@@ -67,6 +67,8 @@ void tpool_init(tpool_t* tpool, size_t thread_cnt_, pthread_t* pool_){
     }
 
     tpool->work_first = NULL, tpool->work_last = NULL;
+
+    for (int i =0; i< thred)
 }
 
 #endif

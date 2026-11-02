@@ -11,16 +11,21 @@
 #include <signal.h>
 #inlcude "threadpool.h"
 
+#define MAXREQ 10
+
 void* request_work(void* arg_){
     int clientfd = (int)*arg;
     char *req = malloc(sizeof(char)*100);
     recv(clientfd, req, 99, 0);
     printf("%s", req);
+    free(arg);
 
 }
 
 int main(){
     int sockfd, clientfd;
+    tpool_t* tpool;
+    tpool_init(tpool, MAXREQ, )
 
     struct addrinfo hints, *servinfo, *curr;
     struct sockaddr_storage client_addr;
@@ -61,7 +66,7 @@ int main(){
     }
 
    freeaddrino(servinfo);
-
+    
    if (curr == NULL){
         perror("failed to bind");
         exit(1);
@@ -81,9 +86,10 @@ int main(){
             continue;
         }
 
-        tpool_add_work()
+        int* fdptr = malloc(sizeof(int));
+
+        tpool_work_enqueue(tpool, request_work,fdptr);
     }
 
-   
     
 }
