@@ -11,52 +11,14 @@
 #include <pthread.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include "../parser.h"
+#include <errno.h>
+#include "response.h"
 
 #define REQUESTBUFLEN 2048
 
-// sendfile across socket, returns 0 if successful,
-// otherwise -1
-int sendfile_s(int sockfd, const char* path){
-    int fd = open(path, O_RDONLY, S_IRWXU | S_IRWXG);
-
-    if (fd < 0){
-        perror("open");
-    }
-
-    struct stat st;
-    if (fstat(fd, &st) < 0){
-        perror("fstat");
-        close(fd);
-        return -1;
-    }
-
-    off_t offset = 0;
-    off_t total_bytes = st.st_size; // st_size contain total bytes size of file
-    off_t bytes_sent = 0;
-
-    while (total_bytes > 0){
-        off_t bytes_sent_now = 0;
-        int ok = sendfile(fd, sockfd, offset, &bytes_sent_now, NULL, 0);
-
-        if (ok < 0){
-            perror("sendfile");
-            close(fd);
-            return -1;
-        }
-
-        total_bytes -= bytes_sent_now;
-        offset += bytes_sent_now;
-        bytes_sent += bytes_sent_now;
-        printf("Total Bytes: %lld, Bytes Sent: %lld, Bytes Sent Now: %lld, ", total_bytes, bytes_sent, bytes_sent_now);
-    }
-
-    close(fd);
-    return 0;
-}
-
 // creates dynamically allocated string and returns the request
 char* GetRequest(int clientfd){
-
     char* req = (char*)malloc(sizeof(char)*REQUESTBUFLEN);
     size_t capacity = REQUESTBUFLEN -1;
 
@@ -74,23 +36,25 @@ char* GetRequest(int clientfd){
     while ((bytes = recv(clientfd, buf, REQUESTBUFLEN,0)) > 0){
         // if data recieved is too large to add to req object
         // realloc req and increase its capacity
+        printf("Recv returned: %d\n", bytes);
         while (bytes + strlen(req) > capacity){
             char* temp = realloc(req, capacity*2);
             
             if (temp == NULL){
                 continue;
             }
-
+            req = temp;
             capacity*=2;
         }
 
         strcat(req, buf);
+
+        if(strstr(req, "\r\n\r\n") != NULL) break;
     }
     return req;
 }
 
 int main(){
-
     int sockfd, status, newfd;
     int rv;
     struct addrinfo hints, *res, *curr;
@@ -150,17 +114,30 @@ int main(){
                 continue;
         };
 
-        send(newfd, http_response_head, strlen(http_response_head),0);
-        sendfile_s(newfd, "../test.html");
-        char* req = GetRequest(newfd);
+        // int flags = fcntl(newfd, F_GETFL, 0);
+        // fcntl(newfd, F_SETFL, flags | O_NONBLOCK);
 
+        // send(newfd, http_response_head, strlen(http_response_head),0);
+        // sendfile_s(newfd, "../test.html");
+        char* req = GetRequest(newfd);
+   
         if (req == NULL){
             perror("malloc");
             continue;
         }
 
-        printf("%s", req);
+        printf("Original Request:\n %s", req);
+        Request* request = parseReq(req);
+        if (request == NULL){
+            continue;
+        }
+        printf("Request Line: Method: %s", request->method);
+        
+        send(newfd, http_response_head, strlen(http_response_head),0);
+        sendfile_s(newfd, "../test.html");
+
         free(req);
+        free(request);
         close(newfd);
     };
 
